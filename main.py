@@ -272,6 +272,7 @@ WAITING_BROADCAST_EDIT = "WAITING_BROADCAST_EDIT"
 WAITING_CODE_NUMBER = "WAITING_CODE_NUMBER" 
 WAITING_BAN_INPUT = "WAITING_BAN_INPUT"
 WAITING_UNBAN_INPUT = "WAITING_UNBAN_INPUT"
+SEARCHING_USER = "SEARCHING_USER"
 
 # Charger le catalogue au démarrage
 CATALOG = load_catalog()
@@ -3365,6 +3366,10 @@ def main():
                     CallbackQueryHandler(admin_features.show_codes_history, pattern="^refresh_codes$"),
                     CallbackQueryHandler(admin_features.handle_codes_pagination, pattern="^(prev|next)_codes_page$"),
                     CallbackQueryHandler(admin_features.show_ban_user_menu, pattern="^ban_user_menu$"),
+                    CallbackQueryHandler(admin_features.show_user_details, pattern=r"^user_details_\d+$"),
+                    CallbackQueryHandler(admin_features.show_user_activity, pattern=r"^user_activity_\d+$"),
+                    CallbackQueryHandler(lambda u, c: admin_features.show_user_list(u, c, page=int(u.callback_query.data.split('_')[2])), pattern=r"^user_page_\d+$"),
+                    CallbackQueryHandler(lambda u, c: admin_features.show_user_list(u, c, user_type=u.callback_query.data.split('_')[1]), pattern=r"^filter_(validated|pending|banned)$"),
                     CallbackQueryHandler(admin_features.show_unban_user_menu, pattern="^unban_user_menu$"),
                     CallbackQueryHandler(admin_features.handle_unban_callback, pattern="^unban_[0-9]+$"),
                     CallbackQueryHandler(
