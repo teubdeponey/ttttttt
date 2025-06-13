@@ -367,7 +367,10 @@ async def admin_list_codes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = update.effective_user
-    
+
+    await admin_features.register_user(user)
+    await admin_features.update_user_activity(user.id, 'connection')
+
     if hasattr(update, 'message') and update.message:
         try:
             await update.message.delete()
@@ -2630,6 +2633,17 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             product_info = context.user_data.get(f'nav_product_{nav_id}')
             print(f"product_info trouvé: {product_info}")
 
+            if product_info:
+                category = product_info['category']
+                product_name = product_info['name']
+            
+                # Ajouter ici le suivi de l'activité
+                await admin_features.update_user_activity(
+                    update.effective_user.id,
+                    'view_product',
+                    product_name
+                )
+
             if not product_info:
                 await query.answer("Produit non trouvé")
                 return
@@ -2788,7 +2802,11 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     elif query.data.startswith("view_"):
         category = query.data.replace("view_", "")
         if category in CATALOG:
-            # Initialisation des stats si nécessaire
+            await admin_features.update_user_activity(
+                update.effective_user.id, 
+                'view_category',
+                category
+            )
             if 'stats' not in CATALOG:
                 CATALOG['stats'] = {
                     "total_views": 0,
