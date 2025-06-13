@@ -2637,12 +2637,11 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 category = product_info['category']
                 product_name = product_info['name']
             
-                # Ajouter ici le suivi de l'activité
-                await admin_features.update_user_activity(
-                    update.effective_user.id,
-                    'view_product',
-                    product_name
-                )
+            await admin_features.update_user_activity(
+                update.effective_user.id,
+                'view_product',
+                product_name
+            )
 
             if not product_info:
                 await query.answer("Produit non trouvé")
@@ -2803,7 +2802,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         category = query.data.replace("view_", "")
         if category in CATALOG:
             await admin_features.update_user_activity(
-                update.effective_user.id, 
+                update.effective_user.id,
                 'view_category',
                 category
             )
