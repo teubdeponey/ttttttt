@@ -1,4 +1,4 @@
-﻿import json
+import json
 import pytz  
 import asyncio
 import string
@@ -329,14 +329,14 @@ class AdminFeatures:
             exp_date = datetime.fromisoformat(expiration)
             exp_str = exp_date.strftime("%d/%m/%Y à %H:%M")
         
-            # Format amélioré avec titre en gras non copiable et contenu copiable
+            # Format modifié avec uniquement le code copiable
             codes_text += "*Code d'accès temporaire :*\n"
-            codes_text += f"`{code}\n"
+            codes_text += f"`{code}`\n"  # Seul le code est dans un bloc copiable
             codes_text += "⚠️ Code à usage unique\n"
-            codes_text += f"⏰ Expire le {exp_str}`\n\n"
-    
+            codes_text += f"⏰ Expire le {exp_str}\n\n"
+
         keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="generate_multiple_codes")]]
-    
+
         await update.callback_query.edit_message_text(
             codes_text,
             reply_markup=InlineKeyboardMarkup(keyboard),
@@ -427,14 +427,14 @@ class AdminFeatures:
                         else:
                             display_name = str(user_id)
 
-                        text += f"`{code['code']}`\n"
+                        text += f"`{code['code']}`\n"  # Seul le code est copiable
                         text += f"✅ Utilisé par : {display_name} (`{user_id}`)\n\n"
                     else:
                         exp_date = datetime.fromisoformat(code["expiration"])
                         exp_str = exp_date.strftime("%d/%m/%Y à %H:%M")
-                        text += f"`{code['code']}\n"
+                        text += f"`{code['code']}`\n"  # Seul le code est copiable
                         text += f"⚠️ Code à usage unique\n"
-                        text += f"⏰ Expire le {exp_str}`\n\n"
+                        text += f"⏰ Expire le {exp_str}\n\n"
 
             active_btn_text = "📍 Codes actifs" if not showing_used else "Codes actifs"
             used_btn_text = "📍 Codes utilisés" if showing_used else "Codes utilisés"
@@ -465,13 +465,14 @@ class AdminFeatures:
                 parse_mode='Markdown'
             )
             return self.STATES['CHOOSING']
-    
+
         except TelegramBadRequest as e:
             if str(e) == "Message is not modified":
                 await update.callback_query.answer("Liste déjà à jour!")
             else:
                 raise
             return self.STATES['CHOOSING']
+
 
     async def show_user_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_type: str = None):
         """Affiche une liste paginée d'utilisateurs selon leur type (validés/en attente/bannis)"""
@@ -583,7 +584,7 @@ class AdminFeatures:
                 await update.callback_query.answer("Une erreur est survenue.")
             except:
                 pass
-            return "CHOOSING"
+            return "CHOOSING" 
             
     async def show_ban_user_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Affiche le menu pour bannir un utilisateur"""
