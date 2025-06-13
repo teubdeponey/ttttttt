@@ -1560,3 +1560,193 @@ class AdminFeatures:
         except Exception as e:
             print(f"Erreur lors de l'ajout des boutons admin : {e}")
         return keyboard
+
+    async def get_user_stats(self, user_id: int) -> dict:
+        """
+        Récupère les statistiques détaillées d'un utilisateur
+        """
+        user_data = self._users.get(str(user_id), {})
+        stats = {
+            'user_id': user_id,
+            'username': user_data.get('username', 'Non défini'),
+            'first_name': user_data.get('first_name', 'Non défini'),
+            'last_name': user_data.get('last_name', 'Non défini'),
+            'last_seen': user_data.get('last_seen', 'Jamais'),
+            'status': 'Banni' if user_id in self._access_codes.get('banned_users', []) else
+                        'Validé' if user_id in self._access_codes.get('authorized_users', []) else
+                        'En attente',
+            'join_date': user_data.get('join_date', 'Inconnue')
+        }
+        return stats
+
+    async def show_user_details(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
+        """
+        Affiche les détails détaillés d'un utilisateur
+        """
+        stats = await self.get_user_stats(user_id)
+        
+        text = (
+            f"👤 *Détails de l'utilisateur*\n\n"
+            f"🆔 ID: `{user_id}`\n"
+            f"👤 Username: {stats['username']}\n"
+            f"📝 Nom: {stats['first_name']} {stats['last_name']}\n"
+            f"📅 Inscrit le: {stats['join_date']}\n"
+            f"⏱️ Dernière activité: {stats['last_seen']}\n"
+            f"📊 Statut: {stats['status']}\n"
+        )
+
+        keyboard = [
+            [InlineKeyboardButton("🚫 Bannir" if stats['status'] != 'Banni' else "✅ Débannir", 
+                                callback_data=f"{'ban' if stats['status'] != 'Banni' else 'unban'}_{user_id}")],
+            [InlineKeyboardButton("📊 Voir activité", callback_data=f"user_activity_{user_id}")],
+            [InlineKeyboardButton("🔙 Retour à la liste", callback_data="manage_users")]
+        ]
+
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return "CHOOSING"
+
+    async def show_user_activity(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
+        """
+        Affiche l'historique d'activité d'un utilisateur
+        """
+        user_data = self._users.get(str(user_id), {})
+        
+        # On pourrait stocker ces informations dans un nouveau fichier activity.json
+        activity = {
+            'last_seen': user_data.get('last_seen', 'Jamais'),
+            'connections': user_data.get('connections', 0),
+            'products_viewed': user_data.get('products_viewed', []),
+            'categories_visited': user_data.get('categories_visited', [])
+        }
+
+        text = (
+            f"📊 *Activité de l'utilisateur*\n\n"
+            f"📅 Dernière connexion: {activity['last_seen']}\n"
+            f"🔄 Nombre de connexions: {activity['connections']}\n\n"
+            f"🛍️ *Produits consultés:*\n"
+        )
+
+        if activity['products_viewed']:
+            for product in activity['products_viewed'][-5:]:  # Afficher les 5 derniers
+                text += f"• {product}\n"
+        else:
+            text += "Aucun produit consulté\n"
+
+        text += "\n📁 *Catégories visitées:*\n"
+        if activity['categories_visited']:
+            for category in activity['categories_visited']:
+                text += f"• {category}\n"
+        else:
+            text += "Aucune catégorie visitée\n"
+
+        keyboard = [
+            [InlineKeyboardButton("👤 Retour aux détails", 
+                                callback_data=f"user_details_{user_id}")],
+            [InlineKeyboardButton("🔙 Retour à la liste", 
+                                callback_data="manage_users")]
+        ]
+
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return "CHOOSING"
+
+    async def update_user_activity(self, user_id: int, activity_type: str, data: str = None):
+        """
+        Met à jour l'activité d'un utilisateur
+        activity_type peut être: 'connection', 'view_product', 'view_category'
+        """
+        if str(user_id) not in self._users:
+            self._users[str(user_id)] = {}
+
+        user = self._users[str(user_id)]
+        current_time = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+        
+        if activity_type == 'connection':
+            user['connections'] = user.get('connections', 0) + 1
+        elif activity_type == 'view_product':
+            if 'products_viewed' not in user:
+                user['products_viewed'] = []
+            user['products_viewed'].append({
+                'product': data,
+                'timestamp': current_time
+            })
+            # Garder uniquement les 20 derniers produits vus
+            user['products_viewed'] = user['products_viewed'][-20:]
+        elif activity_type == 'view_category':
+            if 'categories_visited' not in user:
+                user['categories_visited'] = []
+            if data not in user['categories_visited']:
+                user['categories_visited'].append(data)
+
+        user['last_seen'] = current_time
+        self._save_users()
+
+    async def get_user_list_keyboard(self, user_type: str, page: int = 0, items_per_page: int = 5):
+        """
+        Génère le clavier pour la liste des utilisateurs avec pagination
+        """
+        authorized_users = set(self._access_codes.get("authorized_users", []))
+        banned_users = set(self._access_codes.get("banned_users", []))
+        
+        # Filtrer les utilisateurs selon le type
+        filtered_users = []
+        for user_id, user_data in self._users.items():
+            user_id_int = int(user_id)
+            if user_type == 'validated' and user_id_int in authorized_users:
+                filtered_users.append((user_id_int, user_data))
+            elif user_type == 'pending' and user_id_int not in authorized_users and user_id_int not in banned_users:
+                filtered_users.append((user_id_int, user_data))
+            elif user_type == 'banned' and user_id_int in banned_users:
+                filtered_users.append((user_id_int, user_data))
+
+        # Pagination
+        total_users = len(filtered_users)
+        total_pages = (total_users + items_per_page - 1) // items_per_page
+        start_idx = page * items_per_page
+        end_idx = min(start_idx + items_per_page, total_users)
+        
+        keyboard = []
+        for user_id, user_data in filtered_users[start_idx:end_idx]:
+            display_name = f"@{user_data.get('username')}" if user_data.get('username') else (
+                f"{user_data.get('first_name', '')} {user_data.get('last_name', '')}".strip() or str(user_id)
+            )
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"👤 {display_name}",
+                    callback_data=f"user_details_{user_id}"
+                )
+            ])
+
+        # Boutons de navigation
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(
+                InlineKeyboardButton("◀️", callback_data=f"user_page_{page-1}")
+            )
+        nav_buttons.append(
+            InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="current_page")
+        )
+        if page < total_pages - 1:
+            nav_buttons.append(
+                InlineKeyboardButton("▶️", callback_data=f"user_page_{page+1}")
+            )
+        if nav_buttons:
+            keyboard.append(nav_buttons)
+
+        # Boutons de filtres
+        keyboard.extend([
+            [InlineKeyboardButton("✅ Validés", callback_data="filter_validated"),
+                InlineKeyboardButton("⏳ En attente", callback_data="filter_pending"),
+                InlineKeyboardButton("🚫 Bannis", callback_data="filter_banned")],
+            [InlineKeyboardButton("🔍 Rechercher", callback_data="search_users")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="admin")]
+        ])
+
+        return keyboard
