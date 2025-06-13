@@ -272,7 +272,6 @@ WAITING_BROADCAST_EDIT = "WAITING_BROADCAST_EDIT"
 WAITING_CODE_NUMBER = "WAITING_CODE_NUMBER" 
 WAITING_BAN_INPUT = "WAITING_BAN_INPUT"
 WAITING_UNBAN_INPUT = "WAITING_UNBAN_INPUT"
-SEARCHING_USER = "SEARCHING_USER"
 
 # Charger le catalogue au démarrage
 CATALOG = load_catalog()
@@ -2666,6 +2665,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                             InlineKeyboardButton("Vidéo suivante ➡️", callback_data=f"next_{nav_id}")
                         ])
 
+                # Navigation entre produits (en deuxième)
                 if prev_product or next_product:
                     product_nav = []
                     if prev_product:
@@ -2684,6 +2684,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                         product_nav.append(InlineKeyboardButton("Produit suivant ▶️", callback_data=f"product_{new_nav_id}"))
                     keyboard.append(product_nav)
 
+                # Boutons Commander et Retour
                 keyboard.append([
                     InlineKeyboardButton(
                         "🛒 Commander",
@@ -2695,8 +2696,9 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                     InlineKeyboardButton("🔙 Retour à la catégorie", callback_data=f"view_{category}")
                 ])
 
+                # Gestion de l'affichage
                 if 'media' in product and product['media']:
-
+                    # Pour les produits avec média, on doit supprimer et recréer
                     try:
                         await query.message.delete()
                     except Exception as e:
@@ -2711,7 +2713,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                                 reply_markup=InlineKeyboardMarkup(keyboard),
                                 parse_mode='HTML'
                             )
-                        else: 
+                        else:  # video
                             message = await context.bot.send_video(
                                 chat_id=query.message.chat_id,
                                 video=current_media['media_id'],
@@ -2730,7 +2732,9 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                         )
                         context.user_data['last_product_message_id'] = message.message_id
                 else:
+                    # Pour les produits sans média, on essaie d'abord d'éditer
                     try:
+                        # Si on vient d'un produit sans média, on peut éditer
                         await query.message.edit_text(
                             text=caption,
                             reply_markup=InlineKeyboardMarkup(keyboard),
@@ -2738,12 +2742,14 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                         )
                     except Exception as e:
                         print(f"Erreur lors de l'édition du message: {e}")
-
+                        # Si l'édition échoue (probablement parce qu'on vient d'un produit avec média)
+                        # On supprime l'ancien message s'il existe
                         try:
                             await query.message.delete()
                         except Exception as e:
                             print(f"Erreur lors de la suppression de l'ancien message: {e}")
                         
+                        # Et on crée un nouveau message
                         message = await context.bot.send_message(
                             chat_id=query.message.chat_id,
                             text=caption,
@@ -2754,6 +2760,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
                 await query.answer()
 
+                # Incrémenter les stats
                 if 'stats' not in CATALOG:
                     CATALOG['stats'] = {
                         "total_views": 0,
@@ -2781,6 +2788,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     elif query.data.startswith("view_"):
         category = query.data.replace("view_", "")
         if category in CATALOG:
+            # Initialisation des stats si nécessaire
             if 'stats' not in CATALOG:
                 CATALOG['stats'] = {
                     "total_views": 0,
@@ -2795,28 +2803,33 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             if category not in CATALOG['stats']['category_views']:
                 CATALOG['stats']['category_views'][category] = 0
 
+            # Mettre à jour les statistiques
             CATALOG['stats']['category_views'][category] += 1
             CATALOG['stats']['total_views'] += 1
             CATALOG['stats']['last_updated'] = datetime.now(paris_tz).strftime("%H:%M:%S")
             save_catalog(CATALOG)
 
             products = CATALOG[category]
+            # Afficher la liste des produits
             text = f"*{category}*\n\n"
             keyboard = []
             for product in products:
+                # Créer un ID court unique pour ce produit
                 nav_id = str(random.randint(1000, 9999))
+                # Stocker les informations du produit avec cet ID
                 context.user_data[f'nav_product_{nav_id}'] = {
                     'category': category,
                     'name': product['name']
                 }
                 keyboard.append([InlineKeyboardButton(
                     product['name'],
-                    callback_data=f"product_{nav_id}"  
+                    callback_data=f"product_{nav_id}"  # Utiliser l'ID court
                 )])
 
             keyboard.append([InlineKeyboardButton("🔙 Retour au menu", callback_data="show_categories")])
 
             try:
+                # Suppression du dernier message de produit (photo ou vidéo) si existe
                 if 'last_product_message_id' in context.user_data:
                     try:
                         await context.bot.delete_message(
@@ -2830,6 +2843,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 print(f"Texte du message : {text}")
                 print(f"Clavier : {keyboard}")
 
+                # Éditer le message existant au lieu de le supprimer et recréer
                 await query.message.edit_text(
                     text=text,
                     reply_markup=InlineKeyboardMarkup(keyboard),
@@ -2842,6 +2856,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
             except Exception as e:
                 print(f"Erreur lors de la mise à jour du message des produits: {e}")
+                # Si l'édition échoue, on crée un nouveau message
                 message = await context.bot.send_message(
                     chat_id=query.message.chat_id,
                     text=text,
@@ -2850,6 +2865,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 )
                 context.user_data['category_message_id'] = message.message_id
 
+            # Mettre à jour les stats des produits seulement s'il y en a
             if products:
                 if 'stats' not in CATALOG:
                     CATALOG['stats'] = {
@@ -2865,6 +2881,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 if category not in CATALOG['stats']['product_views']:
                     CATALOG['stats']['product_views'][category] = {}
 
+                # Mettre à jour les stats pour chaque produit dans la catégorie
                 for product in products:
                     if product['name'] not in CATALOG['stats']['product_views'][category]:
                         CATALOG['stats']['product_views'][category][product['name']] = 0
@@ -2875,6 +2892,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     elif query.data.startswith(("next_", "prev_")):
         try:
             direction, nav_id = query.data.split("_")
+            # Récupérer les informations du produit
             product_info = context.user_data.get(f'nav_product_{nav_id}')
             if not product_info:
                 await query.answer("Navigation expirée")
@@ -2883,6 +2901,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             category = product_info['category']
             product_name = product_info['name']
         
+            # Récupérer le produit
             product = next((p for p in CATALOG[category] if p['name'] == product_name), None)
 
             if product and 'media' in product:
@@ -2890,11 +2909,12 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 total_media = len(media_list)
                 current_index = context.user_data.get('current_media_index', 0)
 
+                # Navigation simple
                 if direction == "next":
                     current_index = current_index + 1
                     if current_index >= total_media:
                         current_index = 0
-                else:  
+                else:  # prev
                     current_index = current_index - 1
                     if current_index < 0:
                         current_index = total_media - 1
@@ -2906,18 +2926,22 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 caption += f"💰 <b>Prix:</b>\n{product['price']}\n\n"
                 caption += f"📝 <b>Description:</b>\n{product['description']}"
 
+                # Création des boutons
                 keyboard = []
-           
+            
+                # Navigation des médias (en premier)
                 if total_media > 1:
                     keyboard.append([
                         InlineKeyboardButton("⬅️ Vidéo précédente", callback_data=f"prev_{nav_id}"),
                         InlineKeyboardButton("Vidéo suivante ➡️", callback_data=f"next_{nav_id}")
                     ])
             
+                # Navigation entre produits (en deuxième)
                 prev_product, next_product = get_sibling_products(category, product['name'])
                 if prev_product or next_product:
                     product_nav = []
                     if prev_product:
+                        # Au lieu de générer un nouvel ID aléatoire, utilisez un ID basé sur le nom du produit
                         prev_nav_id = str(abs(hash(prev_product['name'])) % 10000)
                         context.user_data[f'nav_product_{prev_nav_id}'] = {
                             'category': category,
@@ -2926,6 +2950,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                         product_nav.append(InlineKeyboardButton("◀️ Produit précédent", callback_data=f"product_{prev_nav_id}"))
     
                     if next_product:
+                        # Même chose pour le produit suivant
                         next_nav_id = str(abs(hash(next_product['name'])) % 10000)
                         context.user_data[f'nav_product_{next_nav_id}'] = {
                             'category': category,
@@ -2934,6 +2959,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                         product_nav.append(InlineKeyboardButton("Produit suivant ▶️", callback_data=f"product_{next_nav_id}"))
                     keyboard.append(product_nav)
 
+                # Bouton Commander et Retour (en dernier)
                 keyboard.append([
                     InlineKeyboardButton(
                         "🛒 Commander",
@@ -2967,7 +2993,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                                 reply_markup=InlineKeyboardMarkup(keyboard),
                                 parse_mode='HTML'
                             )
-                    else: 
+                    else:  # video
                         try:
                             message = await context.bot.send_video(
                                 chat_id=query.message.chat_id,
@@ -3000,7 +3026,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 keyboard.append([
                     InlineKeyboardButton(
                         category, 
-                        callback_data=f"editcat_{category}"  
+                        callback_data=f"editcat_{category}"  # Raccourci ici
                     )
                 ])
         keyboard.append([InlineKeyboardButton("🔙 Annuler", callback_data="cancel_edit")])
@@ -3011,13 +3037,14 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return SELECTING_CATEGORY
 
-    elif query.data.startswith("editcat_"):  
+    elif query.data.startswith("editcat_"):  # Nouveau gestionnaire avec nom plus court
         category = query.data.replace("editcat_", "")
         products = CATALOG.get(category, [])
         
         keyboard = []
         for product in products:
             if isinstance(product, dict):
+                # Créer un callback_data plus court
                 callback_data = f"editp_{category[:10]}_{product['name'][:20]}"
                 keyboard.append([
                     InlineKeyboardButton(product['name'], callback_data=callback_data)
@@ -3034,6 +3061,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         try:
             _, short_category, short_product = query.data.split("_", 2)
             
+            # Trouver la vraie catégorie et le vrai produit
             category = next((cat for cat in CATALOG.keys() if cat.startswith(short_category) or short_category.startswith(cat)), None)
             if category:
                 product_name = next((p['name'] for p in CATALOG[category] if p['name'].startswith(short_product) or short_product.startswith(p['name'])), None)
@@ -3079,6 +3107,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     
         if product:
             if field == 'media':
+                # Stocker les informations du produit en cours d'édition
                 context.user_data['temp_product_category'] = category
                 context.user_data['temp_product_name'] = product_name
                 context.user_data['temp_product_price'] = product.get('price')
@@ -3086,6 +3115,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 context.user_data['temp_product_media'] = []
                 context.user_data['media_count'] = 0
             
+                # Envoyer le message d'invitation pour les médias
                 message = await query.message.edit_text(
                     "📸 Envoyez les photos ou vidéos du produit (plusieurs possibles)\n\n"
                     "*Si vous ne voulez pas en envoyer, cliquez sur ignorer* \n\n"
@@ -3098,6 +3128,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 context.user_data['media_invitation_message_id'] = message.message_id
                 return WAITING_PRODUCT_MEDIA
             else:
+                # Votre code existant pour les autres champs
                 current_value = product.get(field, "Non défini")
                 field_names = {
                     'name': 'nom',
@@ -3118,16 +3149,18 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         return await show_admin_menu(update, context)
 
     elif query.data == "confirm_reset_stats":
+        # Réinitialiser les statistiques
         now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         CATALOG['stats'] = {
             "total_views": 0,
             "category_views": {},
             "product_views": {},
-            "last_updated": now.split(" ")[1],  
-            "last_reset": now.split(" ")[0]  
+            "last_updated": now.split(" ")[1],  # Juste l'heure
+            "last_reset": now.split(" ")[0]  # Juste la date
         }
         save_catalog(CATALOG)
         
+        # Afficher un message de confirmation
         keyboard = [[InlineKeyboardButton("🔙 Retour au menu", callback_data="admin")]]
         await query.message.edit_text(
             "✅ *Les statistiques ont été réinitialisées avec succès!*\n\n"
@@ -3139,10 +3172,12 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                
     elif query.data == "show_categories":
         keyboard = []
+        # Créer uniquement les boutons de catégories
         for category in CATALOG.keys():
             if category != 'stats':
                 keyboard.append([InlineKeyboardButton(category, callback_data=f"view_{category}")])
 
+        # Ajouter uniquement le bouton retour à l'accueil
         keyboard.append([InlineKeyboardButton("🔙 Retour à l'accueil", callback_data="back_to_home")])
 
         try:
@@ -3155,6 +3190,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             context.user_data['menu_message_id'] = message.message_id
         except Exception as e:
             print(f"Erreur lors de la mise à jour du message des catégories: {e}")
+            # Si la mise à jour échoue, recréez le message
             message = await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text="📋 *Menu*\n\n"
@@ -3210,30 +3246,37 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.photo:
         file_id = update.message.photo[-1].file_id
         CONFIG['banner_image'] = file_id
+        # Sauvegarder dans config.json
         with open('config.json', 'w', encoding='utf-8') as f:
             json.dump(CONFIG, f, indent=4)
         await update.message.reply_text(
             f"✅ Image banner enregistrée!\nFile ID: {file_id}"
         )
 
+
+    # Récupérer le chat_id et le message
     if update.callback_query:
         chat_id = update.callback_query.message.chat_id
     else:
         chat_id = update.effective_chat.id
 
+    # Nouveau clavier simplifié pour l'accueil
     keyboard = [
         [InlineKeyboardButton("📋 MENU", callback_data="show_categories")]
     ]
 
+    # Ajouter le bouton admin si l'utilisateur est administrateur
     if str(update.effective_user.id) in ADMIN_IDS:
         keyboard.append([InlineKeyboardButton("🔧 Menu Admin", callback_data="admin")])
 
+    # Configurer le bouton de contact en fonction du type (URL ou username)
     contact_button = None
     if CONFIG.get('contact_url'):
         contact_button = InlineKeyboardButton("📞 Contact", url=CONFIG['contact_url'])
     elif CONFIG.get('contact_username'):
         contact_button = InlineKeyboardButton("📞 Contact Telegram", url=f"https://t.me/{CONFIG['contact_username']}")
 
+    # Ajouter les boutons de contact et canaux
     if contact_button:
         keyboard.extend([
             [
@@ -3266,12 +3309,14 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         if update.callback_query:
+            # Si c'est un callback, on édite le message existant
             await update.callback_query.edit_message_text(
                 text=welcome_text,
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode='HTML'
             )
         else:
+            # Sinon, on envoie un nouveau message
             menu_message = await context.bot.send_message(
                 chat_id=chat_id,
                 text=welcome_text,
@@ -3282,6 +3327,7 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         print(f"Erreur lors du retour à l'accueil: {e}")
+        # En cas d'erreur, on essaie d'envoyer un nouveau message
         try:
             menu_message = await context.bot.send_message(
                 chat_id=chat_id,
@@ -3301,7 +3347,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             print(f"Erreur réseau: {context.error}")
             if update and update.callback_query:
                 await update.callback_query.answer("Erreur de connexion, veuillez réessayer.")
-            await asyncio.sleep(1)  
+            await asyncio.sleep(1)  # Attendre avant de réessayer
         elif isinstance(context.error, TimedOut):
             print(f"Timeout: {context.error}")
             if update and update.callback_query:
@@ -3315,6 +3361,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 def main():
     """Fonction principale du bot"""
     try:
+        # Créer l'application avec les timeouts personnalisés
         global admin_features
         application = (
             Application.builder()
@@ -3329,11 +3376,14 @@ def main():
         )
         admin_features = AdminFeatures()
 
+        # Initialiser l'access manager
         global access_manager
         access_manager = AccessManager()
 
+        # Ajouter le gestionnaire d'erreurs
         application.add_error_handler(error_handler)
         
+        # Gestionnaire de conversation principal
         conv_handler = ConversationHandler(
             entry_points=[
                 CommandHandler('start', start),
@@ -3366,12 +3416,9 @@ def main():
                     CallbackQueryHandler(admin_features.show_codes_history, pattern="^refresh_codes$"),
                     CallbackQueryHandler(admin_features.handle_codes_pagination, pattern="^(prev|next)_codes_page$"),
                     CallbackQueryHandler(admin_features.show_ban_user_menu, pattern="^ban_user_menu$"),
-                    CallbackQueryHandler(admin_features.show_user_details, pattern=r"^user_details_\d+$"),
-                    CallbackQueryHandler(admin_features.show_user_activity, pattern=r"^user_activity_\d+$"),
-                    CallbackQueryHandler(lambda u, c: admin_features.show_user_list(u, c, page=int(u.callback_query.data.split('_')[2])), pattern=r"^user_page_\d+$"),
-                    CallbackQueryHandler(lambda u, c: admin_features.show_user_list(u, c, user_type=u.callback_query.data.split('_')[1]), pattern=r"^filter_(validated|pending|banned)$"),
                     CallbackQueryHandler(admin_features.show_unban_user_menu, pattern="^unban_user_menu$"),
                     CallbackQueryHandler(admin_features.handle_unban_callback, pattern="^unban_[0-9]+$"),
+                    CallbackQueryHandler(admin_features.show_advanced_stats, pattern="^advanced_stats$"),
                     CallbackQueryHandler(
                         lambda u, c: admin_features.show_user_list(u, c, user_type=u.callback_query.data.split('_')[2]), 
                         pattern=r"^user_list_(validated|pending|banned)_[0-9]+$"
@@ -3472,14 +3519,14 @@ def main():
                 ],
                 WAITING_BROADCAST_MESSAGE: [
                     MessageHandler(
-                        (filters.TEXT | filters.PHOTO | filters.VIDEO | filters.Sticker.ALL) & ~filters.COMMAND,  
+                        (filters.TEXT | filters.PHOTO | filters.VIDEO | filters.Sticker.ALL) & ~filters.COMMAND,  # Même correction ici
                         admin_features.send_broadcast_message
                     ),
                     CallbackQueryHandler(handle_normal_buttons)
                 ],
                 WAITING_BROADCAST_EDIT: [
                     MessageHandler(
-                        (filters.TEXT | filters.PHOTO | filters.VIDEO | filters.Sticker.ALL) & ~filters.COMMAND, 
+                        (filters.TEXT | filters.PHOTO | filters.VIDEO | filters.Sticker.ALL) & ~filters.COMMAND,  # Notez le S majuscule et le .ALL
                         admin_features.handle_broadcast_edit
                     ),
                     CallbackQueryHandler(handle_normal_buttons)
@@ -3500,6 +3547,7 @@ def main():
         application.add_handler(CommandHandler("listecodes", admin_list_codes))
         application.add_handler(conv_handler)
 
+        # Démarrer le bot avec les paramètres optimisés
         print("Bot démarré...")
         application.run_polling(
             drop_pending_updates=True,
