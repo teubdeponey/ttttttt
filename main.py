@@ -1686,6 +1686,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
     await admin_features.register_user(update.effective_user)
+    await admin_features.update_user_activity(update.effective_user.id, 'connection')
 
 
     if query.data == "admin":
