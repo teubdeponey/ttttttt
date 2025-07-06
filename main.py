@@ -269,7 +269,7 @@ WAITING_NEW_CATEGORY_NAME = "WAITING_NEW_CATEGORY_NAME"
 WAITING_BUTTON_NAME = "WAITING_BUTTON_NAME"
 WAITING_BUTTON_VALUE = "WAITING_BUTTON_VALUE"
 WAITING_BROADCAST_EDIT = "WAITING_BROADCAST_EDIT"
-WAITING_CODE_NUMBER = "WAITING_CODE_NUMBER" 
+WAITING_CODE_NUMBER = "WAITING_CODE_NUMBER"
 WAITING_BAN_INPUT = "WAITING_BAN_INPUT"
 WAITING_UNBAN_INPUT = "WAITING_UNBAN_INPUT"
 
@@ -367,10 +367,7 @@ async def admin_list_codes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = update.effective_user
-
-    await admin_features.register_user(user)
-    await admin_features.update_user_activity(user.id, 'connection')
-
+    
     if hasattr(update, 'message') and update.message:
         try:
             await update.message.delete()
@@ -484,11 +481,22 @@ async def show_networks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [
-            InlineKeyboardButton("💭 Canal telegram", url="https://t.me/+EOpsDmOxp-8wNjY0")
+            InlineKeyboardButton("💭 Canal telegram", url="https://t.me/+aHbA9_8tdTQwYThk")
         ],
-        
+
         [
-            InlineKeyboardButton("👻 Snapchat", url="https://snapchat.com/t/Bd0YHKhq")
+            InlineKeyboardButton("🥔 Contact potato", url="https://dlj199.org/christianDry547")
+        ],
+        [
+            InlineKeyboardButton("📱 Instagram", url="https://www.instagram.com/christiandry.54?igsh=MWU1dXNrbXdpMzllNA%3D%3D&utm_source=qr")
+        ],
+
+        [
+            InlineKeyboardButton("🌐 Signal", url="https://signal.group/#CjQKIJNEETZNr9_LRMvShQbblk_NUdDyabA7e_eyUQY6-ptsEhBSpXex0cjIoOEYQ4H3D8K5")
+        ],
+
+        [
+            InlineKeyboardButton("👻 Snapchat", url="https://snapchat.com/t/0HumwTKi")
         ],
         [InlineKeyboardButton("🔙 Retour", callback_data="back_to_home")]
     ]
@@ -1686,7 +1694,6 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
     await admin_features.register_user(update.effective_user)
-    await admin_features.update_user_activity(update.effective_user.id, 'connection')
 
 
     if query.data == "admin":
@@ -2634,16 +2641,6 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             product_info = context.user_data.get(f'nav_product_{nav_id}')
             print(f"product_info trouvé: {product_info}")
 
-            if product_info:
-                category = product_info['category']
-                product_name = product_info['name']
-            
-            await admin_features.update_user_activity(
-                update.effective_user.id,
-                'view_product',
-                product_name
-            )
-
             if not product_info:
                 await query.answer("Produit non trouvé")
                 return
@@ -2802,11 +2799,7 @@ async def handle_normal_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     elif query.data.startswith("view_"):
         category = query.data.replace("view_", "")
         if category in CATALOG:
-            await admin_features.update_user_activity(
-                update.effective_user.id,
-                'view_category',
-                category
-            )
+            # Initialisation des stats si nécessaire
             if 'stats' not in CATALOG:
                 CATALOG['stats'] = {
                     "total_views": 0,
@@ -3436,7 +3429,6 @@ def main():
                     CallbackQueryHandler(admin_features.show_ban_user_menu, pattern="^ban_user_menu$"),
                     CallbackQueryHandler(admin_features.show_unban_user_menu, pattern="^unban_user_menu$"),
                     CallbackQueryHandler(admin_features.handle_unban_callback, pattern="^unban_[0-9]+$"),
-                    CallbackQueryHandler(admin_features.show_advanced_stats, pattern="^advanced_stats$"),
                     CallbackQueryHandler(
                         lambda u, c: admin_features.show_user_list(u, c, user_type=u.callback_query.data.split('_')[2]), 
                         pattern=r"^user_list_(validated|pending|banned)_[0-9]+$"
