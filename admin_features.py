@@ -10,7 +10,6 @@ from telegram.error import BadRequest as TelegramBadRequest
 
 
 class AdminFeatures:
-    paris_tz = pytz.timezone('Europe/Paris')
     STATES = {
         'CHOOSING': 'CHOOSING',
         'WAITING_CODE_NUMBER': 'WAITING_CODE_NUMBER'
@@ -330,14 +329,14 @@ class AdminFeatures:
             exp_date = datetime.fromisoformat(expiration)
             exp_str = exp_date.strftime("%d/%m/%Y à %H:%M")
         
-            # Format modifié avec uniquement le code copiable
+            # Format amélioré avec titre en gras non copiable et contenu copiable
             codes_text += "*Code d'accès temporaire :*\n"
-            codes_text += f"`{code}`\n"  # Seul le code est dans un bloc copiable
+            codes_text += f"`{code}\n"
             codes_text += "⚠️ Code à usage unique\n"
-            codes_text += f"⏰ Expire le {exp_str}\n\n"
-
+            codes_text += f"⏰ Expire le {exp_str}`\n\n"
+    
         keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="generate_multiple_codes")]]
-
+    
         await update.callback_query.edit_message_text(
             codes_text,
             reply_markup=InlineKeyboardMarkup(keyboard),
@@ -428,14 +427,14 @@ class AdminFeatures:
                         else:
                             display_name = str(user_id)
 
-                        text += f"`{code['code']}`\n"  # Seul le code est copiable
+                        text += f"`{code['code']}`\n"
                         text += f"✅ Utilisé par : {display_name} (`{user_id}`)\n\n"
                     else:
                         exp_date = datetime.fromisoformat(code["expiration"])
                         exp_str = exp_date.strftime("%d/%m/%Y à %H:%M")
-                        text += f"`{code['code']}`\n"  # Seul le code est copiable
+                        text += f"`{code['code']}\n"
                         text += f"⚠️ Code à usage unique\n"
-                        text += f"⏰ Expire le {exp_str}\n\n"
+                        text += f"⏰ Expire le {exp_str}`\n\n"
 
             active_btn_text = "📍 Codes actifs" if not showing_used else "Codes actifs"
             used_btn_text = "📍 Codes utilisés" if showing_used else "Codes utilisés"
@@ -466,14 +465,13 @@ class AdminFeatures:
                 parse_mode='Markdown'
             )
             return self.STATES['CHOOSING']
-
+    
         except TelegramBadRequest as e:
             if str(e) == "Message is not modified":
                 await update.callback_query.answer("Liste déjà à jour!")
             else:
                 raise
             return self.STATES['CHOOSING']
-
 
     async def show_user_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_type: str = None):
         """Affiche une liste paginée d'utilisateurs selon leur type (validés/en attente/bannis)"""
@@ -585,7 +583,7 @@ class AdminFeatures:
                 await update.callback_query.answer("Une erreur est survenue.")
             except:
                 pass
-            return "CHOOSING" 
+            return "CHOOSING"
             
     async def show_ban_user_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Affiche le menu pour bannir un utilisateur"""
@@ -1538,7 +1536,6 @@ class AdminFeatures:
                 [InlineKeyboardButton("🚫 Voir utilisateurs bannis", callback_data="user_list_banned_0")],
                 [InlineKeyboardButton("⛔️ Bannir un utilisateur", callback_data="ban_user_menu")],
                 [InlineKeyboardButton("🔓 Débannir un utilisateur", callback_data="unban_user_menu")],
-                [InlineKeyboardButton("📊 Statistiques avancées", callback_data="advanced_stats")],
                 [InlineKeyboardButton("🔙 Retour", callback_data="admin")]
             ]
             
@@ -1555,104 +1552,6 @@ class AdminFeatures:
             await update.callback_query.answer("Une erreur est survenue.")
             return "CHOOSING"
         
-    async def show_advanced_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Affiche les statistiques avancées des utilisateurs"""
-        try:
-            # Calculer les statistiques
-            total_users = len(self._users)
-            authorized_users = len(self._access_codes.get("authorized_users", []))
-            banned_users = len(self._access_codes.get("banned_users", []))
-            pending_users = total_users - authorized_users - banned_users
-
-            # Calculer les statistiques d'activité
-            active_today = 0
-            active_week = 0
-            active_month = 0
-            total_connections = 0
-            total_products_viewed = 0
-            most_viewed_products = {}
-            most_visited_categories = {}
-
-            current_time = datetime.now(self.paris_tz)
-        
-            for user_id, user_data in self._users.items():
-                # Vérifier la dernière activité
-                last_seen_str = user_data.get('last_seen')
-                if last_seen_str:
-                    try:
-                        last_seen = datetime.strptime(last_seen_str, "%Y-%m-%d %H:%M:%S")
-                        if (current_time - last_seen).days == 0:
-                            active_today += 1
-                        if (current_time - last_seen).days <= 7:
-                            active_week += 1
-                        if (current_time - last_seen).days <= 30:
-                            active_month += 1
-                    except:
-                        pass
-
-                # Compter les connexions
-                total_connections += user_data.get('connections', 0)
-
-                # Compter les produits vus
-                products_viewed = user_data.get('products_viewed', [])
-                total_products_viewed += len(products_viewed)
-            
-                # Compter les catégories visitées
-                for category in user_data.get('categories_visited', []):
-                    most_visited_categories[category] = most_visited_categories.get(category, 0) + 1
-
-                # Compter les produits vus
-                for product_view in products_viewed:
-                    product_name = product_view.get('product')
-                    if product_name:
-                        most_viewed_products[product_name] = most_viewed_products.get(product_name, 0) + 1
-
-            # Préparer le texte des statistiques
-            text = "📊 *Statistiques avancées des utilisateurs*\n\n"
-        
-            # Statistiques générales
-            text += "*Utilisateurs :*\n"
-            text += f"• Total : {total_users}\n"
-            text += f"• Validés : {authorized_users}\n"
-            text += f"• En attente : {pending_users}\n"
-            text += f"• Bannis : {banned_users}\n\n"
-        
-            # Statistiques d'activité
-            text += "*Activité :*\n"
-            text += f"• Actifs aujourd'hui : {active_today}\n"
-            text += f"• Actifs cette semaine : {active_week}\n"
-            text += f"• Actifs ce mois : {active_month}\n"
-            text += f"• Total connexions : {total_connections}\n"
-            text += f"• Total produits consultés : {total_products_viewed}\n\n"
-        
-            # Top 5 des catégories les plus visitées
-            text += "*Top 5 catégories visitées :*\n"
-            sorted_categories = sorted(most_visited_categories.items(), key=lambda x: x[1], reverse=True)[:5]
-            for category, count in sorted_categories:
-                text += f"• {category}: {count} visites\n"
-            text += "\n"
-        
-            # Top 5 des produits les plus vus
-            text += "*Top 5 produits consultés :*\n"
-            sorted_products = sorted(most_viewed_products.items(), key=lambda x: x[1], reverse=True)[:5]
-            for product, count in sorted_products:
-                text += f"• {product}: {count} vues\n"
-
-            keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="manage_users")]]
-        
-            await update.callback_query.edit_message_text(
-                text=text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-        
-            return "CHOOSING"
-
-        except Exception as e:
-            print(f"Erreur dans show_advanced_stats : {e}")
-            await update.callback_query.answer("Une erreur est survenue.")
-            return "CHOOSING"
-
     async def add_user_buttons(self, keyboard: list) -> list:
         """Ajoute les boutons de gestion utilisateurs au clavier admin existant"""
         try:
@@ -1660,51 +1559,3 @@ class AdminFeatures:
         except Exception as e:
             print(f"Erreur lors de l'ajout des boutons admin : {e}")
         return keyboard
-
-    async def update_user_activity(self, user_id: int, activity_type: str, data: str = None):
-        """Met à jour l'activité d'un utilisateur
-        Args:
-            user_id (int): ID de l'utilisateur
-            activity_type (str): Type d'activité ('connection', 'view_category', 'view_product')
-            data (str, optional): Données supplémentaires (nom du produit/catégorie). Defaults to None.
-        """
-        try:
-            str_user_id = str(user_id)
-            if str_user_id not in self._users:
-                self._users[str_user_id] = {}
-
-            user = self._users[str_user_id]
-            current_time = datetime.now(self.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
-        
-            if activity_type == 'connection':
-                user['connections'] = user.get('connections', 0) + 1
-            
-            elif activity_type == 'view_product':
-                if 'products_viewed' not in user:
-                    user['products_viewed'] = []
-            
-                # Ajouter le produit consulté avec timestamp
-                user['products_viewed'].append({
-                    'product': data,
-                    'timestamp': current_time
-                })
-            
-                # Garder seulement les 20 derniers produits vus
-                user['products_viewed'] = user['products_viewed'][-20:]
-            
-            elif activity_type == 'view_category':
-                if 'categories_visited' not in user:
-                    user['categories_visited'] = []
-                
-                # Ajouter la catégorie si pas déjà présente
-                if data not in user['categories_visited']:
-                    user['categories_visited'].append(data)
-
-            # Mettre à jour last_seen
-            user['last_seen'] = current_time
-        
-            # Sauvegarder les modifications
-            self._save_users()
-        
-        except Exception as e:
-            print(f"Erreur dans update_user_activity : {e}")
